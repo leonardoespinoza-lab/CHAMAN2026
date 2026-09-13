@@ -56,6 +56,7 @@ import {
   resumirVentanasAperturaEstomatica,
   aplicarEntradasAgronomicasSuelo,
   obtenerRegistroFenologicoDecisorioEnFecha,
+  campaniaFenologicaParaFecha,
   SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
 } from 'modelos/src';
 import { CHAMAN_REPORT_LOGO_DATA_URI } from './chaman-report-logo';
@@ -2053,7 +2054,7 @@ export class LotesService {
     const estado = siembra?.fechaCosecha
       ? 'Cierre de cosecha'
       : 'Seguimiento en curso';
-    const etapa = this.getEstadoFenologico(siembra, predicciones);
+    const etapa = this.getEstadoFenologicoInforme(siembra, predicciones);
     const riesgo = this.getResumenRiesgo(siembra, predicciones);
     const huella = this.getResumenHuella(lote, siembra);
     const frio = datos.frio;
@@ -2064,7 +2065,7 @@ export class LotesService {
       clima,
       soilAssessment,
     );
-    const fenologia = this.getFenologiaItems(siembra);
+    const fenologia = this.getFenologiaInformeItems(siembra);
     const lluviaAcumulada = this.formatClimaMetric(
       clima?.acumulados?.lluvia,
       'mm',
@@ -2605,6 +2606,15 @@ export class LotesService {
       .page { width: auto; margin: 0; border: none; border-radius: 0; box-shadow: none; overflow: visible; }
       .section { break-inside: auto; }
       .section h2, .section h3 { break-after: avoid; }
+      .section-copy { break-after: avoid; }
+      .section > p { break-inside: avoid; }
+      .section > h2 + p { break-after: avoid; }
+      .note { break-inside: avoid; }
+      .report-overview > div { break-inside: avoid; }
+      .report-overview > div + div { margin-top: 18px; }
+      .report-closing { break-inside: avoid; }
+      .quality-item small, .quality-item em { font-size: 11px; }
+      footer { padding: 10px 24px; font-size: 10px; break-inside: avoid; }
       .section.phenology-section { break-inside: avoid; }
       .phenology-section + .sanitary-section { break-before: auto; page-break-before: auto; }
       .card, .score-card, .summary-chart, .ndvi-tracking { break-inside: avoid; }
@@ -2648,7 +2658,7 @@ export class LotesService {
         ${this.metricCard('Riesgo sanitario', riesgo.titulo, riesgo.detalle)}
         ${this.metricCard('Riego', this.getRiegoTexto(siembra), this.getAguaUtilTexto(siembra))}
         ${this.metricCard('Huella hidrica', huella.total, huella.detalle)}
-        ${this.metricCard('Carga fitosanitaria', `${cargaFitosanitaria.score}/100`, `${this.capitalize(cargaFitosanitaria.nivel.replace('_', ' '))} - ${cargaFitosanitaria.aplicacionesTotales} aplicacion(es)`)}
+        ${this.metricCard('Carga fitosanitaria', cargaFitosanitaria.nivel === 'sin_datos' ? 'Sin datos' : `${cargaFitosanitaria.score}/100`, `${this.capitalize(cargaFitosanitaria.nivel.replace('_', ' '))} - ${cargaFitosanitaria.aplicacionesTotales} aplicacion(es)`)}
         ${this.metricCard(esPerenne ? 'Frio / CP' : 'Heladas', esPerenne ? this.getResumenFrioTermico(clima, frio) : helada, esPerenne ? this.getDetalleFrioTermico(clima, frio) : this.getDetalleHelada(clima))}
       </div>
       <div class="note ${riesgo.clase}">
@@ -2662,7 +2672,7 @@ export class LotesService {
       ${this.renderCoberturaServicios(datos)}
     </section>
 
-    <section class="section two-col">
+    <section class="section report-overview">
       <div>
         <h2>Tablero de indicadores</h2>
         <p class="section-copy">Sintesis comparativa de presion sanitaria, carga quimica y recencia de aplicaciones. La escala es 0-100 y no reemplaza el diagnostico a campo.</p>
@@ -2753,14 +2763,15 @@ export class LotesService {
       ${this.renderBitacoraCampoCertificado(visitas, evidenciasCampo)}
     </section>
 
-    <section class="section">
+    ${this.getPuntosNdviCertificado(reportesNdvi, siembra).length ? `<section class="section">
       <h2>Seguimiento satelital del cultivo</h2>
       <p>La curva principal usa una escala NDVI fija de 0 a 1 para que los cambios sean comparables entre fechas y no se exageren variaciones pequenas. Cada escena se relaciona con el dia del ciclo y la mejor referencia fenologica disponible.</p>
       ${this.renderNdviSparkline(reportesNdvi, siembra)}
       <div class="note"><strong>Lectura satelital:</strong> ${this.escapeHtml(this.getResumenSatelital(reportesNdvi, siembra))}</div>
       ${this.renderTablaSatelital(reportesNdvi, siembra)}
-    </section>
+    </section>` : ''}
 
+    <div class="report-closing">
     <section class="section">
       <h2>Fuentes de datos</h2>
       <p class="section-copy">Cada decision debe leerse con su calidad de input. Una fuente modelada o incompleta sirve para orientar, pero las decisiones criticas deben contrastarse con sensor, recorrida o dato de campo.</p>
@@ -2781,6 +2792,7 @@ export class LotesService {
     <footer>
       Este informe es un documento tecnico generado automaticamente por Chaman Agro. Debe interpretarse junto con observacion a campo, criterio profesional y marbetes vigentes de productos aplicados. La validez agronomica depende de la calidad de los datos cargados y de los sensores/servicios conectados.
     </footer>
+    </div>
   </main>
 </body>
 </html>`;
@@ -3175,7 +3187,7 @@ export class LotesService {
         nombre: 'Fenologia',
         estado: siembra ? 'con_dato' : 'no_aplica',
         lectura: siembra
-          ? `${this.getEstadoFenologico(siembra, predicciones)} · ${this.getDiasCultivoTexto(siembra)}`
+          ? `${this.getEstadoFenologicoInforme(siembra, predicciones)} · ${this.getDiasCultivoTexto(siembra)}`
           : 'El lote no tiene siembra operativa',
         fuente: siembra
           ? 'Cronograma y registros fenologicos Chaman'
@@ -3699,7 +3711,7 @@ export class LotesService {
 
     return `<div class="executive-board">
       ${this.scoreCard('Sanidad', riesgo.titulo, riesgoScore, riesgo.detalle, riesgo.clase || '')}
-      ${this.scoreCard('Carga fitosanitaria', `${this.formatNumber(datos.cargaFitosanitaria.score, 0)}/100`, datos.cargaFitosanitaria.score, datos.cargaFitosanitaria.recomendacion, this.getRiesgoTone(datos.cargaFitosanitaria.score))}
+      ${this.scoreCard('Carga fitosanitaria', datos.cargaFitosanitaria.nivel === 'sin_datos' ? 'Sin datos' : `${this.formatNumber(datos.cargaFitosanitaria.score, 0)}/100`, datos.cargaFitosanitaria.score, datos.cargaFitosanitaria.recomendacion, this.getRiesgoTone(datos.cargaFitosanitaria.score))}
       ${this.scoreCard('Agua y riego', this.getRiegoTexto(datos.siembra), riegoScore, this.getAguaUtilTexto(datos.siembra), riegoScore < 45 ? 'warn' : '')}
       ${this.scoreCard('Satelite', ndvi ? `NDVI ${this.formatNumber(ndvi.valor, 3)}` : 'Sin escena', sateliteScore, ndvi ? `Ultima escena ${ndvi.fecha || 'sin fecha'} · cobertura valida ${this.formatNumber(ndvi.coberturaValida, 1)}%` : 'Pendiente de escena certificada para la campana', ndvi ? '' : 'warn')}
       ${this.scoreCard('Huella / clima', huellaConsolidada ? 'Con datos' : 'Parcial', huellaConsolidada ? 80 : 35, climaDetalle, huellaConsolidada ? '' : 'warn')}
@@ -3756,13 +3768,18 @@ export class LotesService {
       datos.predicciones,
     );
     const cultivo = datos.siembra?.semilla?.cultivo || 'Cultivo';
-    const etapa = this.getEstadoFenologico(datos.siembra, datos.predicciones);
+    const etapa = this.getEstadoFenologicoInforme(datos.siembra, datos.predicciones);
 
     acciones.push(
       `${cultivo} en ${etapa}: sostener lectura por ambiente y actualizar el informe cuando cambie fenologia, aplicaciones o clima.`,
     );
 
-    if (riesgoScore >= 40) {
+    const tieneRiesgo = this.getLecturasSanitariasOperativas(
+      this.getPrediccionSanitariaReciente(datos.siembra, datos.predicciones),
+    ).length > 0;
+    if (!tieneRiesgo) {
+      acciones.push('Sin lectura sanitaria operativa reciente: actualizar el calculo y mantener monitoreo a campo; no equivale a riesgo bajo.');
+    } else if (riesgoScore >= 40) {
       acciones.push(
         `Priorizar recorrida sanitaria: ${riesgo.titulo.toLowerCase()} (${riesgo.detalle}) antes de nuevas decisiones de aplicacion.`,
       );
@@ -3772,7 +3789,9 @@ export class LotesService {
       );
     }
 
-    if (datos.cargaFitosanitaria.score >= 35) {
+    if (datos.cargaFitosanitaria.nivel === 'sin_datos') {
+      acciones.push('Sin datos suficientes de manejo fitosanitario: registrar monitoreos y aplicaciones antes de interpretar la carga.');
+    } else if (datos.cargaFitosanitaria.score >= 35) {
       acciones.push(
         `Auditar carga fitosanitaria: revisar productos, principios activos, dosis, carencias y justificacion tecnica por etapa.`,
       );
@@ -3820,23 +3839,26 @@ export class LotesService {
     datos: CertificadoDatos,
     riesgo: { titulo: string; detalle: string; clase?: string },
   ): string {
+    const tieneRiesgo = this.getLecturasSanitariasOperativas(
+      this.getPrediccionSanitariaReciente(datos.siembra, datos.predicciones),
+    ).length > 0;
     const rows = [
       {
         label: 'Riesgo sanitario',
-        value: this.getRiesgoSanitarioScore(datos.siembra, datos.predicciones),
+        value: tieneRiesgo ? this.getRiesgoSanitarioScore(datos.siembra, datos.predicciones) : undefined,
         detail: riesgo.titulo,
         tone: riesgo.clase || '',
       },
       {
         label: 'Carga fitosanitaria',
-        value: datos.cargaFitosanitaria.score,
+        value: datos.cargaFitosanitaria.nivel === 'sin_datos' ? undefined : datos.cargaFitosanitaria.score,
         detail: this.capitalize(
           datos.cargaFitosanitaria.nivel.replace('_', ' '),
         ),
       },
       {
         label: 'Presion de enfermedades',
-        value: datos.cargaFitosanitaria.presionEnfermedades,
+        value: tieneRiesgo ? datos.cargaFitosanitaria.presionEnfermedades : undefined,
         detail: `${datos.cargaFitosanitaria.enfermedadesMonitoreadas} enfermedad(es)`,
       },
       {
@@ -3862,6 +3884,9 @@ export class LotesService {
     detail: string,
     toneOverride = '',
   ): string {
+    if (value === undefined || value === null || !Number.isFinite(value)) {
+      return `<div class="score-row warn"><span>${this.escapeHtml(label)}</span><div></div><strong>Sin dato</strong><small style="grid-column: 1 / -1; color: var(--muted);">${this.escapeHtml(detail || '')}</small></div>`;
+    }
     const safeValue = this.limitarPorcentaje(value);
     const tone = toneOverride || this.getRiesgoTone(safeValue);
     return `<div class="score-row ${tone}">
@@ -3967,7 +3992,7 @@ export class LotesService {
   ): string {
     const puntos = this.getPuntosNdviCertificado(reportes, siembra);
     if (!puntos.length) {
-      return '<div class="chart" style="display:grid;place-items:center;color:#60708c;">Sin escenas satelitales procesadas</div>';
+      return '<p>Sin escenas satelitales procesadas; no se genera un grafico vacio.</p>';
     }
 
     const width = 760;
@@ -4262,14 +4287,11 @@ export class LotesService {
     const cultivo = siembra?.semilla?.cultivo;
     if (esCultivoPerenne(cultivo)) {
       const referencia = siembra?.semilla?.fenologiaReferencia?.etapas;
+      const crono = siembra?.crono?.etapas;
+      const disponibles = crono && Object.keys(crono).length ? crono : referencia;
       const etapas =
-        referencia && Object.keys(referencia).length
-          ? Object.entries(referencia)
-              .map(([nombre, value]) => ({
-                nombre: this.prettyKey(nombre),
-                dia: Number(String(value).replace(',', '.')),
-              }))
-              .filter((item) => Number.isFinite(item.dia))
+        disponibles && Object.keys(disponibles).length
+          ? this.getOffsetsPerennesInforme(disponibles as Record<string, number | string>)
           : getEtapasPerennesReferencia(cultivo).map((item) => ({
               nombre: item.nombre,
               dia: item.dia,
@@ -4294,7 +4316,9 @@ export class LotesService {
         }
         return {
           nombre: etapa,
-          fuente: referencia
+          fuente: crono && Object.keys(crono).length
+            ? 'Cronologia de la siembra; calendario de referencia'
+            : referencia
             ? 'Referencia fenologica de la variedad'
             : 'Referencia de campania perenne',
           confirmada: false,
@@ -4886,7 +4910,7 @@ export class LotesService {
           `<tr><td>${this.escapeHtml(item.nombre)}</td><td>${this.escapeHtml(item.valor)}</td></tr>`,
       )
       .join('');
-    return `<table><thead><tr><th>Etapa</th><th>Referencia</th></tr></thead><tbody>${rows}</tbody></table>`;
+    return `<p class="section-copy">Cronograma de referencia; no confirma la etapa observada ni inicia los grados-dia. Los registros de campo vigentes tienen prioridad.</p><table><thead><tr><th>Etapa</th><th>Referencia</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
   private renderTablaEnfermedades(
@@ -5021,7 +5045,7 @@ export class LotesService {
         (factor) => `
       <tr>
         <td>${this.escapeHtml(factor.nombre)}</td>
-        <td>${this.escapeHtml(`${this.formatNumber(factor.valor, 0)}/100`)}</td>
+        <td>${this.escapeHtml(carga.nivel === 'sin_datos' ? 'Sin dato' : `${this.formatNumber(factor.valor, 0)}/100`)}</td>
         <td>${this.escapeHtml(`${this.formatNumber(factor.peso, 0)}%`)}</td>
         <td>${this.escapeHtml(factor.detalle)}</td>
       </tr>`,
@@ -5034,7 +5058,7 @@ export class LotesService {
     return `
       <div class="sanitary-management">
         <div><span>Nivel</span><strong>${this.escapeHtml(this.capitalize(carga.nivel.replace('_', ' ')))}</strong></div>
-        <div><span>Presion sanitaria</span><strong>${this.escapeHtml(`${carga.presionEnfermedades}/100`)}</strong></div>
+        <div><span>Presion sanitaria</span><strong>${this.escapeHtml(carga.enfermedadesMonitoreadas ? `${carga.presionEnfermedades}/100` : 'Sin dato')}</strong></div>
         <div><span>Aplicaciones</span><strong>${this.escapeHtml(`${carga.aplicacionesTotales} totales / ${carga.aplicacionesUltimos30Dias} recientes`)}</strong></div>
       </div>
       <div class="note sanitary-recommendation">
@@ -5586,7 +5610,7 @@ export class LotesService {
         ? `Clima operativo: lluvia ${this.formatMaybe(clima.acumulados.lluvia, 1)} mm, helada ${clima.riesgoHelada ? this.capitalize(clima.riesgoHelada.nivel) : 'sin alerta consolidada'}, fuente ${clima.fuente}.`
         : 'Sin clima consolidado en el informe.',
       `Riesgo sanitario ${riesgo.titulo.toLowerCase()} (${riesgo.detalle}).`,
-      `Carga fitosanitaria ${datos.cargaFitosanitaria.score}/100 (${this.capitalize(datos.cargaFitosanitaria.nivel.replace('_', ' '))}).`,
+      datos.cargaFitosanitaria.nivel === 'sin_datos' ? 'Carga fitosanitaria sin datos suficientes.' : `Carga fitosanitaria ${datos.cargaFitosanitaria.score}/100 (${this.capitalize(datos.cargaFitosanitaria.nivel.replace('_', ' '))}).`,
       `Huella hidrica ${huella.total}.`,
     ];
     if (esPerenne) {
@@ -5845,6 +5869,42 @@ export class LotesService {
     return siembra?.motivoCalculoAguaUtil || 'Depende de sensor, suelo y clima';
   }
 
+  // Presentacion del PDF unicamente. No alimenta riego, alertas ni acumuladores.
+  private getEstadoFenologicoInforme(siembra?: ISiembra, predicciones: IPrediccion[] = []): string {
+    if (!siembra || !esCultivoPerenne(siembra.semilla?.cultivo)) {
+      return this.getEstadoFenologico(siembra, predicciones);
+    }
+    const cosecha = siembra.fechaCosecha ? new Date(siembra.fechaCosecha).getTime() : undefined;
+    if (cosecha !== undefined && Number.isFinite(cosecha) && cosecha <= Date.now()) return 'Cosecha registrada';
+    const etapa = this.getEtapaSatelitalCertificado(siembra, new Date());
+    return etapa.confirmada ? etapa.nombre : `${etapa.nombre} (referencia estimada)`;
+  }
+
+  private getOffsetsPerennesInforme(etapas: Record<string, number | string>): { nombre: string; dia: number }[] {
+    const items = Object.entries(etapas).map(([nombre, value]) => ({
+      nombre: this.prettyKey(nombre), valor: Number(String(value).replace(',', '.')),
+    })).filter(item => Number.isFinite(item.valor) && item.valor >= 0);
+    const sonOffsets = items.every((item, index) => index === 0 || item.valor >= items[index - 1].valor);
+    let acumulado = 0;
+    // Mismo convenio de duraciones/offsets que el calendario perenne de la web.
+    // Nunca sumar estos valores como GDD ni usarlos como un biofix observado.
+    return items.map((item, index) => {
+      acumulado += index === 0 ? 0 : item.valor;
+      return { nombre: item.nombre, dia: Math.max(0, Math.min(365, Math.round(sonOffsets ? item.valor : acumulado))) };
+    });
+  }
+
+  private getFenologiaInformeItems(siembra?: ISiembra): { nombre: string; valor: string }[] {
+    const items = new Map<string, { nombre: string; valor: string }>();
+    // El cronograma de la siembra ya viene ultimo y tiene prioridad sobre la referencia.
+    for (const item of this.getFenologiaItems(siembra)) {
+      const key = item.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const unidad = siembra?.semilla?.fenologiaReferencia?.unidadEtapas === 'grados_dia' ? 'GDD' : 'dias';
+      items.set(key, { ...item, valor: /^\d+(?:[.,]\d+)?$/.test(item.valor) ? `${item.valor} ${unidad}` : item.valor });
+    }
+    return [...items.values()];
+  }
+
   private getEstadoFenologico(
     siembra?: ISiembra,
     predicciones: IPrediccion[] = [],
@@ -5923,6 +5983,9 @@ export class LotesService {
       (cosecha !== undefined && (!Number.isFinite(cosecha) || cosecha < inicio))
     ) {
       return 'Sin fecha valida';
+    }
+    if (esCultivoPerenne(siembra.semilla?.cultivo)) {
+      return `Campana fenologica: ${campaniaFenologicaParaFecha(siembra, new Date())}`;
     }
     // Solo presentacion del informe: no modifica fechas ni acumuladores.
     const cerrado = cosecha !== undefined && cosecha <= ahora;

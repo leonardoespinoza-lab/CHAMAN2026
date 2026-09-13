@@ -5,6 +5,81 @@ import {
 } from 'modelos/src';
 import { LotesService } from './service';
 
+describe('Informe - regresiones de La Costa: referencia estacional y ausencia de datos', () => {
+  const service = new LotesService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any) as any;
+  const etapas = { reposo_invernal: 0, yema_hinchada: 35, brotacion: 18, floracion: 18, cuaje: 15,
+    desarrollo_de_fruto: 95, madurez: 35, cosecha: 20, reposo_invernal_siguiente: 129 };
+  const sowing = (): any => ({ fechaSiembra: '2020-01-01', semilla: { cultivo: 'Manzano',
+    fenologiaReferencia: { unidadEtapas: 'dias', brotacion: 'Septiembre', etapas: { ...etapas } } },
+    crono: { etapas: { ...etapas } }, registrosFenologicos: [] });
+  beforeEach(() => jest.useFakeTimers().setSystemTime(new Date('2026-09-13T18:00:00Z')));
+  afterEach(() => jest.useRealTimers());
+
+  it('no transforma la edad de la plantacion ni una prediccion antigua en la etapa actual', () => {
+    const s = sowing(); const original = JSON.stringify(s);
+    expect(service.getEstadoFenologicoInforme(s, [{ nombreEtapa: 'Reposo invernal siguiente' }]))
+      .toBe('Floracion (referencia estimada)');
+    expect(service.getDiasCultivoTexto(s)).toBe('Campana fenologica: 2026/2027');
+    expect(JSON.stringify(s)).toBe(original);
+  });
+  it('conserva prioridad del campo vigente sin iniciar ni reiniciar acumuladores', () => {
+    const s = sowing(); s.registrosFenologicos = [
+      { id: 'brota', fecha: '2026-09-01', etapa: 'Brotacion', tipoEvento: 'inicio_etapa' },
+    ];
+    const original = JSON.stringify(s);
+    expect(service.getEstadoFenologicoInforme(s)).toBe('Brotacion');
+    expect(service.getEstadoFenologicoInforme({ ...s, registrosFenologicos: [
+      { ...s.registrosFenologicos[0], fecha: '2025-09-01' },
+    ] })).toBe('Floracion (referencia estimada)');
+    expect(JSON.stringify(s)).toBe(original);
+  });
+  it('satellite y portada usan los mismos offsets; las duraciones no se ordenan como hitos', () => {
+    const s = sowing();
+    expect(service.getEtapaSatelitalCertificado(s, new Date('2026-09-13T18:00:00Z')))
+      .toMatchObject({ nombre: 'Floracion', confirmada: false });
+    expect(service.getOffsetsPerennesInforme(etapas).map(e => e.dia))
+      .toEqual([0, 35, 53, 71, 86, 181, 216, 236, 365]);
+    expect(service.getOffsetsPerennesInforme({ Reposo: 0, Brotacion: 55, Floracion: 75 }))
+      .toEqual([{ nombre: 'Reposo', dia: 0 }, { nombre: 'Brotacion', dia: 55 }, { nombre: 'Floracion', dia: 75 }]);
+  });
+  it('el calendario se reinicia cada julio y el cronograma cargado tiene prioridad', () => {
+    const s = sowing(); s.crono.etapas = { Reposo: 0, Brotacion: 90 };
+    expect(service.getEtapaSatelitalCertificado(s, new Date('2026-09-13T18:00:00Z')).nombre).toBe('Reposo');
+    expect(service.getEtapaSatelitalCertificado(sowing(), new Date('2027-07-01T18:00:00Z')).nombre).toBe('Reposo invernal');
+  });
+  it('no repite cronograma y referencia varietal ni modifica las estructuras originales', () => {
+    const s = sowing(); const original = JSON.stringify(s);
+    const items = service.getFenologiaInformeItems(s);
+    expect(items).toHaveLength(10);
+    expect(items.filter(i => i.nombre === 'Floracion')).toEqual([{ nombre: 'Floracion', valor: '18 dias' }]);
+    expect(JSON.stringify(s)).toBe(original);
+  });
+  it('no cambia la presentacion ni la duracion del anual cerrado', () => {
+    const s: any = { fechaSiembra: '2025-11-01', fechaCosecha: '2026-04-15', semilla: { cultivo: 'Soja' } };
+    expect(service.getEstadoFenologicoInforme(s)).toBe('Cosecha registrada');
+    expect(service.getDiasCultivoTexto(s)).toBe('Ciclo cerrado: 165');
+  });
+  it('no reserva un grafico satelital vacio que fragmente el cierre del PDF', () => {
+    const html = service.renderNdviSparkline([], sowing());
+    expect(html).toContain('Sin escenas satelitales procesadas');
+    expect(html).not.toContain('class="chart"');
+  });
+  it('el PDF distingue ausencia de riesgo de un cero medido y no altera la carga operativa', () => {
+    const lote = { nombre: 'QA' }; const s = sowing();
+    const carga = service.calcularCargaFitosanitaria(lote, s, [], []);
+    const datos = { lote, siembra: s, predicciones: [], cargaFitosanitaria: carga, reportesNdvi: [] };
+    const original = JSON.stringify(datos);
+    const riesgo = service.getResumenRiesgo(s, []);
+    const prioridad = service.getPrioridadesEjecutivas(datos, riesgo, { total: 'En seguimiento' }, { aplica: false });
+    expect(prioridad.join(' ')).toContain('no equivale a riesgo bajo');
+    expect(prioridad.join(' ')).not.toContain('se mantiene bajo');
+    const html = service.renderIndicadoresEjecutivos(datos, riesgo);
+    expect(html).toContain('<strong>Sin dato</strong>');
+    expect(service.renderScoreRow('Riesgo', 0, 'Bajo')).toContain('0/100');
+    expect(JSON.stringify(datos)).toBe(original);
+  });
+});
+
 describe('LotesService - seguimiento satelital del informe agronomico', () => {
   const service = new LotesService(
     {} as any,

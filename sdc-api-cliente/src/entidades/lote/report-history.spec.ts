@@ -188,9 +188,9 @@ describe('Integracion del historico en el informe existente', () => {
       expect(service.getDiasCultivoTexto({ fechaSiembra: '2026-09-01', fechaCosecha: '2026-10-01' }))
         .toBe('Dias desde inicio: 12');
     });
-    it('conserva los dias desde la plantacion en un perenne sin cosecha', () => {
+    it('identifica la campana del perenne, no los dias desde una plantacion de varios anios', () => {
       expect(service.getDiasCultivoTexto({ fechaSiembra: '2020-01-01', semilla: { cultivo: 'Peral' } }))
-        .toBe('Dias desde inicio: 2447');
+        .toBe('Campana fenologica: 2026/2027');
     });
     it.each([
       { fechaSiembra: 'invalida' },
