@@ -73,6 +73,7 @@ import {
   permisoPuedeVerLote,
 } from '../../auxiliares/authorization/alcance-permiso';
 import { renderHtmlToPdf } from './pdf-renderer';
+import { reportPeriod, renderHistoryChart } from './report-history';
 
 interface IntaFeatureCollection {
   features?: {
@@ -100,6 +101,7 @@ interface CertificadoDatos {
   soilAssessment?: IInteligenciaSueloLote | null;
   reportesNdvi: IReporteNDVI[];
   predicciones: IPrediccion[];
+  historicoSanitario?: IPrediccion[];
   fertilizaciones: IFertilizacion[];
   fumigaciones: IFumigacion[];
   cargaFitosanitaria: ICargaFitosanitaria;
@@ -175,6 +177,10 @@ interface CertificadoClima {
     porcionesFrioAcumuladas?: number;
     gradosDia?: number;
     gradosDiaAcumulados?: number;
+    humedadRelativa?: number;
+    et0?: number;
+    etc?: number;
+    aguaDisponiblePct?: number;
     esPronostico?: boolean;
   }>;
   lectura: string;
@@ -534,10 +540,11 @@ export class LotesService {
       demandaHidrica,
       visitas,
       evidenciasCampo,
+      historicoSanitario,
     ] = await Promise.all([
       this.getFuenteCertificadoConLimite(
         'seguimiento satelital',
-        () => this.getReportesNdviCertificado(id, permiso),
+        () => this.getReportesNdviCertificado(id, permiso, siembra),
         [],
         CERTIFICADO_TIMEOUT_DATOS_MS,
       ),
@@ -603,6 +610,12 @@ export class LotesService {
         [],
         CERTIFICADO_TIMEOUT_DATOS_MS,
       ),
+      this.getFuenteCertificadoConLimite(
+        'historico sanitario',
+        () => this.getHistoricoSanitarioCertificado(siembra),
+        [],
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
     ]);
     const cargaFitosanitaria = this.calcularCargaFitosanitaria(
       lote,
@@ -617,6 +630,7 @@ export class LotesService {
       soilAssessment,
       reportesNdvi,
       predicciones,
+      historicoSanitario,
       fertilizaciones,
       fumigaciones,
       cargaFitosanitaria,
@@ -1355,11 +1369,17 @@ export class LotesService {
   private async getReportesNdviCertificado(
     idLote: string,
     permiso: IPermiso,
+    siembra?: ISiembra,
   ): Promise<IReporteNDVI[]> {
+    const ventana = reportPeriod(siembra);
+    if (!ventana) return [];
     try {
       const query: IQueryParam = {
-        filter: JSON.stringify({ idLote }),
-        limit: 8,
+        filter: JSON.stringify({ idLote, fechaDeLaImagen: {
+          $gte: new Date(ventana.desde).toISOString().slice(0, 10),
+          $lte: new Date(ventana.hasta).toISOString(),
+        } }),
+        limit: 0,
         sort: '-fechaDeLaImagen',
       };
       const response = await this.reportesNDVIsService.get(query, permiso);
@@ -1388,6 +1408,18 @@ export class LotesService {
       },
       timeoutMs,
     );
+  }
+
+  private async getHistoricoSanitarioCertificado(siembra?: ISiembra): Promise<IPrediccion[]> {
+    const ventana = reportPeriod(siembra);
+    if (!siembra?._id || !ventana) return [];
+    return this.getListadoInterno<IPrediccion>('prediccions', {
+      idSiembra: siembra._id,
+      fechaPrediccion: {
+        $gte: new Date(ventana.desde).toISOString().slice(0, 10),
+        $lt: new Date(ventana.hasta + 86400000).toISOString().slice(0, 10),
+      },
+    }, { limit: 0, sort: 'fechaPrediccion' }, CERTIFICADO_TIMEOUT_DATOS_MS);
   }
 
   private async getFertilizacionesCertificado(
@@ -1577,8 +1609,14 @@ export class LotesService {
       : Promise.resolve(undefined);
 
     if (siembra?._id) {
+      const ventana = reportPeriod(siembra);
+      if (!ventana) return undefined;
       const [canonicalResult, riskResult] = await Promise.allSettled([
-        this.repository.getAgrometeorologia(siembra._id),
+        this.repository.getAgrometeorologia(
+          siembra._id,
+          new Date(ventana.desde).toISOString().slice(0, 10),
+          new Date(ventana.hasta).toISOString().slice(0, 10),
+        ),
         riesgoPromise,
       ]);
       const canonical =
@@ -1626,6 +1664,17 @@ export class LotesService {
     riesgosAgroclimaticos: IResumenRiesgosAgroclimaticos | undefined,
     siembra?: ISiembra,
   ): CertificadoClima {
+    const ventana = reportPeriod(siembra);
+    const from = ventana && new Date(ventana.desde).toISOString().slice(0, 10);
+    const to = new Date(ventana?.hasta ?? Date.now()).toISOString().slice(0, 10);
+    const historical = (data.series || []).filter(item =>
+      item.isForecast === false && /^\d{4}-\d{2}-\d{2}$/.test(item.date)
+      && (!from || item.date >= from) && item.date <= to,
+    ).sort((a,b) => a.date.localeCompare(b.date));
+    // Keep model accumulators, never reconstruct GDD/ET from the report.
+    const last = historical.at(-1)?.metrics;
+    const hadSeries = !!data.series?.length;
+    data = { ...data, series: historical };
     const source = data.dataSource;
     const sourceLabels = this.getCanonicalClimateSources(data).map((item) => {
       if (item === 'sensor') {
@@ -1682,12 +1731,12 @@ export class LotesService {
       advertencias: [...new Set(data.warnings || [])],
       requerimientoFrio: requirement,
       acumulados: {
-        lluvia: data.summary.rainAccumulatedMm,
-        gradosDia: data.summary.gddAccumulated,
-        horasFrio: data.summary.chillingHoursAccumulated,
-        unidadesFrioUtah: data.summary.utahChillUnitsAccumulated,
-        porcionesFrio: data.summary.chillPortionsAccumulated,
-        vernalizacion: data.summary.vernalizationAccumulated,
+        lluvia: hadSeries ? last?.rainAccumulatedMm : data.summary.rainAccumulatedMm,
+        gradosDia: hadSeries ? last?.gddAccumulated : data.summary.gddAccumulated,
+        horasFrio: hadSeries ? last?.chillingHoursAccumulated : data.summary.chillingHoursAccumulated,
+        unidadesFrioUtah: hadSeries ? last?.utahChillUnitsAccumulated : data.summary.utahChillUnitsAccumulated,
+        porcionesFrio: hadSeries ? last?.chillPortionsAccumulated : data.summary.chillPortionsAccumulated,
+        vernalizacion: hadSeries ? last?.vernalizationAccumulated : data.summary.vernalizationAccumulated,
       },
       requerimientos: {
         horasFrioObjetivo:
@@ -1785,6 +1834,10 @@ export class LotesService {
       porcionesFrioAcumuladas: item.metrics.chillPortionsAccumulated,
       gradosDia: item.metrics.gddDaily,
       gradosDiaAcumulados: item.metrics.gddAccumulated,
+      humedadRelativa: item.metrics.relativeHumidityMeanPct ?? item.weather.relativeHumidityMeanPct ?? item.weather.relativeHumidityPct,
+      et0: item.metrics.et0Mm,
+      etc: item.metrics.etcMm,
+      aguaDisponiblePct: item.metrics.availableWaterPercentage,
       esPronostico: item.isForecast,
     };
   }
@@ -2419,6 +2472,7 @@ export class LotesService {
       margin: 10px 0 12px;
     }
     .quality-item {
+      break-inside: avoid;
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 8px;
@@ -2594,15 +2648,21 @@ export class LotesService {
       </div>
       <div>
         <h2>${esPerenne ? 'Frio y acumulacion termica' : 'Clima agronomico resumido'}</h2>
-        <p class="section-copy">Variables de decision: lluvia, grados dia, heladas y ventanas agronomicas. Se excluyen curvas de temperatura/humedad para mantener foco ejecutivo.</p>
+        <p class="section-copy">Resumen del motor canonico; los graficos historicos se presentan a continuacion.</p>
         ${this.renderTablaClimaAgronomica(clima, frio, esPerenne)}
       </div>
+    </section>
+
+    <section class="section thermal-section">
+      <h2>Historico de la campana</h2>
+      <p class="section-copy">${this.escapeHtml(this.getPeriodoManejoTexto(siembra))}</p>
+      ${this.renderGraficosHistoricos(clima, siembra)}
     </section>
 
     ${
       esPerenne
         ? `<section class="section thermal-section">
-      <h2>Evolucion del frio y del forzado</h2>
+      <h2>Evolucion del frio</h2>
       <p class="section-copy">La vista acumulada documenta la trayectoria de HF, Unidades Utah y Porciones de Frio. La vista diaria permite auditar cuanto suma cada jornada y cuando el modelo Utah descuenta por efecto del calor. El documento utiliza exclusivamente las series canonicas vigentes.</p>
       ${this.renderGraficosFrio(clima)}
     </section>`
@@ -2617,6 +2677,7 @@ export class LotesService {
     <section class="section sanitary-section">
       <h2>Monitoreo sanitario</h2>
       ${this.renderTablaEnfermedades(siembra, predicciones)}
+      ${this.renderHistoricoSanitario(datos.historicoSanitario, siembra)}
       <h3 style="margin-top:12px;">Manejo fitosanitario registrado</h3>
       ${this.renderCargaFitosanitaria(cargaFitosanitaria)}
     </section>
@@ -3969,7 +4030,7 @@ export class LotesService {
         <polygon points="${area}" fill="url(#areaNdvi)" />
         <polyline fill="none" stroke="url(#lineaNdvi)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" points="${coords.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`).join(' ')}" />
         ${puntosSvg}
-        <text x="${(left + right) / 2}" y="274" text-anchor="middle" fill="#60708c" font-size="11">Fecha de escena y dia desde implantacion · periodo ${this.escapeHtml(periodo)}</text>
+        <text x="${(left + right) / 2}" y="274" text-anchor="middle" fill="#60708c" font-size="11">Fecha de escena y dia del periodo · ${this.escapeHtml(periodo)}</text>
       </svg>
       <p class="chart-caption">La escala permanece fija entre informes. Los cambios deben interpretarse contra fenologia, calidad de escena, clima, manejo y recorrida; NDVI por si solo no diagnostica causa.</p>
     </div>`;
@@ -4015,7 +4076,7 @@ export class LotesService {
           fecha: this.formatDate(fechaIso),
           time,
           valor,
-          diaCultivo: this.getDiasEntreFechas(siembra?.fechaSiembra, fechaIso),
+          diaCultivo: this.getDiasEntreFechas(ventana ? new Date(ventana.desde).toISOString() : siembra?.fechaSiembra, fechaIso),
           etapa: etapa.nombre,
           etapaFuente: etapa.fuente,
           etapaConfirmada: etapa.confirmada,
@@ -4042,30 +4103,66 @@ export class LotesService {
   private getVentanaTemporalCultivo(
     siembra?: ISiembra,
   ): { desde: number; hasta: number } | undefined {
-    const implantacion = new Date(siembra?.fechaSiembra || '').getTime();
-    if (!Number.isFinite(implantacion)) return undefined;
-    const cosecha = new Date(siembra?.fechaCosecha || '').getTime();
-    const hasta = Number.isFinite(cosecha) ? cosecha : Date.now();
-    const perenne =
-      siembra?.semilla?.tipoCultivo === 'Perenne' ||
-      esCultivoPerenne(siembra?.semilla?.cultivo);
-    const unAnioMs = 366 * 24 * 60 * 60 * 1000;
-    return {
-      desde: perenne ? Math.max(implantacion, hasta - unAnioMs) : implantacion,
-      hasta,
-    };
+    return reportPeriod(siembra);
   }
 
   private getPeriodoManejoTexto(siembra?: ISiembra): string {
-    const ventana = this.getVentanaTemporalCultivo(siembra);
+    const ventana = reportPeriod(siembra);
     if (!ventana)
-      return 'Historial del lote; no hay un ciclo activo para acotar el periodo.';
-    const perenne =
-      siembra?.semilla?.tipoCultivo === 'Perenne' ||
-      esCultivoPerenne(siembra?.semilla?.cultivo);
-    return perenne
-      ? `Periodo movil del ciclo perenne: ${this.formatDate(new Date(ventana.desde).toISOString())} a ${this.formatDate(new Date(ventana.hasta).toISOString())}.`
-      : `Campana de la siembra: ${this.formatDate(new Date(ventana.desde).toISOString())} a ${this.formatDate(new Date(ventana.hasta).toISOString())}.`;
+      return 'Sin fecha de campana valida para acotar el historico.';
+    const label = ventana.reason === 'siembra' ? 'Campana de la siembra'
+      : ventana.reason === 'poscosecha' ? 'Desde la poscosecha registrada'
+      : 'Anio en curso (sin poscosecha registrada para este anio)';
+    return `${label}: ${this.formatDate(new Date(ventana.desde).toISOString().slice(0, 10))} a ${this.formatDate(new Date(ventana.hasta).toISOString().slice(0, 10))}.`;
+  }
+
+  private renderGraficosHistoricos(clima?: CertificadoClima, siembra?: ISiembra): string {
+    const period = reportPeriod(siembra);
+    if (!period || !clima?.serie.length) return '<p>Sin serie historica consolidada para este periodo.</p>';
+    const from = new Date(period.desde).toISOString().slice(0, 10);
+    const to = new Date(period.hasta).toISOString().slice(0, 10);
+    const days = clima.serie.filter(d => d.esPronostico === false && d.fecha >= from && d.fecha <= to);
+    const points = days.map(d => ({ date: d.fecha, values: { ...d } }));
+    const panels = [
+      { title: 'Temperatura diaria', unit: 'C', lines: [
+        { key: 'temperaturaMin', name: 'Minima', color: '#547ec8' },
+        { key: 'temperaturaMax', name: 'Maxima', color: '#d7833d' }] },
+      { title: 'Humedad relativa del aire', unit: '%', bounds: [0,100] as [number,number], lines: [
+        { key: 'humedadRelativa', name: 'HR media', color: '#168d82' }] },
+      { title: 'Lluvia diaria', unit: 'mm', lines: [
+        { key: 'lluvia', name: 'Precipitacion', color: '#547ec8' }] },
+      { title: 'Grados-dia acumulados', unit: 'GDD', lines: [
+        { key: 'gradosDiaAcumulados', name: 'Acumulado canonico', color: '#d7833d' }] },
+      { title: 'Evapotranspiracion diaria', unit: 'mm', lines: [
+        { key: 'et0', name: 'ET0 de referencia', color: '#547ec8' },
+        { key: 'etc', name: 'ETc del cultivo', color: '#168d82' }] },
+      { title: 'Agua disponible estimada', unit: '%', bounds: [0,100] as [number,number], lines: [
+        { key: 'aguaDisponiblePct', name: 'Balance del suelo (no humedad volumetrica)', color: '#168d82' }] },
+    ];
+    const charts = panels.map(panel => renderHistoryChart({ ...panel, points, from: Date.parse(from), to: Date.parse(to) })).join('');
+    return `<p class="section-copy">${days.length} jornada(s) con serie consolidada. ${days.length ? `Datos disponibles: ${this.escapeHtml(days[0].fecha)} a ${this.escapeHtml(days.at(-1)!.fecha)}.` : ''} Los huecos no se convierten en cero ni se unen; se excluye el pronostico. Los acumulados conservan su biofix original y no se reinician al recortar el informe.</p><div class="thermal-charts">${charts}</div>`;
+  }
+
+  private renderHistoricoSanitario(predicciones: IPrediccion[] = [], siembra?: ISiembra): string {
+    const period = reportPeriod(siembra);
+    if (!period) return '';
+    const lines = new Map<string, {key: string; name: string; color: string}>();
+    const colors = ['#168d82', '#547ec8', '#bd7530', '#8055a5'];
+    const points = predicciones.filter(p => !p.idSiembra || String(p.idSiembra) === String(siembra?._id))
+      .map(p => ({date: String(p.fechaPrediccion || '').slice(0, 10), values: Object.fromEntries(
+        (p.enfermedades || []).filter(e => esLecturaSanitariaOperativa(e) &&
+          typeof e.resultado === 'number' && Number.isFinite(e.resultado)).map(e => {
+          const key = String(e.idEnfermedad || e.enfermedad);
+          if (!lines.has(key)) lines.set(key, {key, name: e.enfermedad, color: colors[lines.size % colors.length]});
+          return [key, e.resultado];
+        }),
+      )}));
+    // Historial separado: nunca modifica el resumen de riesgo actual del lote.
+    if (!lines.size) return '<p>Sin serie sanitaria operativa disponible para graficar en este periodo.</p>';
+    return `<h3>Historico de indicadores sanitarios</h3><p class="section-copy">Resultados publicados por cada motor en escala 0–100; no equivalen a una medicion de dano ni a una probabilidad calibrada. Se excluyen lecturas experimentales o no operativas.</p><div class="thermal-charts">${[...lines.values()].map(line => renderHistoryChart({
+      title: line.name, unit: 'Indice /100', lines: [line], points,
+      from: Date.parse(new Date(period.desde).toISOString().slice(0, 10)), to: period.hasta, bounds: [0, 100],
+    })).join('')}</div>`;
   }
 
   private getIndiceSatelitalValido(value: unknown): number | undefined {
@@ -5698,6 +5795,8 @@ export class LotesService {
     if (siembra.fechaCosecha) {
       return 'Cosecha registrada';
     }
+    const observado = obtenerRegistroFenologicoDecisorioEnFecha(siembra, new Date());
+    if (observado?.etapa) return observado.etapa;
     const ultima = predicciones[0] || siembra.ultimaPrediccion;
     if (ultima?.nombreEtapa) {
       return ultima.nombreEtapa;
@@ -5832,7 +5931,7 @@ export class LotesService {
     if (!value) {
       return '';
     }
-    const fecha = new Date(value);
+    const fecha = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value);
     if (!Number.isFinite(fecha.getTime())) {
       return '';
     }

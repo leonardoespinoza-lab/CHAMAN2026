@@ -1202,7 +1202,7 @@ describe('LotesService - clima canonico del informe agronomico', () => {
         series: serie,
       }),
       undefined,
-      siembra('Manzano'),
+      { ...siembra('Manzano'), fechaSiembra: '2020-01-01' },
     );
 
     const html = instance.renderGraficosFrio(clima);
@@ -1345,7 +1345,8 @@ describe('LotesService - clima canonico del informe agronomico', () => {
         },
         series: [
           {
-            date: '2026-05-01',
+            date: '2026-05-10',
+            isForecast: false,
             weather: {},
             metrics: {},
             source: 'mixed',
